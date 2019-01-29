@@ -14,8 +14,10 @@ import {
   ViewPagerAndroid,
   Platform,
   ActivityIndicator,
-  I18nManager
+  I18nManager,
 } from 'react-native'
+
+const { width, height } = Dimensions.get('window')
 
 /**
  * Default styles
@@ -67,12 +69,7 @@ const styles = {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'transparent',
-    ...Platform.select({
-      android: {
-        flexDirection: I18nManager.isRTL ? 'row-reverse' : 'row'
-      }
-    })
+    backgroundColor: 'transparent'
   },
 
   title: {
@@ -97,12 +94,18 @@ const styles = {
     paddingHorizontal: 10,
     paddingVertical: 10,
     justifyContent: 'space-between',
-    alignItems: 'center'
+    alignItems: 'center',
+    ...Platform.select({
+      android: {
+        flexDirection: I18nManager.isRTL ? 'row-reverse' : 'row'
+      }
+    })
   },
 
   buttonText: {
     fontSize: 50,
-    color: '#007aff'
+    color: '#007aff',
+    fontFamily: 'Arial'
   }
 }
 
@@ -121,10 +124,6 @@ export default class extends Component {
       PropTypes.number,
     ]),
     style: PropTypes.oneOfType([
-      PropTypes.object,
-      PropTypes.number,
-    ]),
-    scrollViewStyle: PropTypes.oneOfType([
       PropTypes.object,
       PropTypes.number,
     ]),
@@ -191,12 +190,6 @@ export default class extends Component {
   state = this.initState(this.props)
 
   /**
-   * Initial render flag
-   * @type {bool}
-   */
-  initialRender = true
-
-  /**
    * autoplay timer
    * @type {null}
    */
@@ -246,30 +239,12 @@ export default class extends Component {
     }
 
     // Default: horizontal
-    const { width, height } = Dimensions.get('window')
-
     initState.dir = props.horizontal === false ? 'y' : 'x'
-
-    if (props.width) {
-      initState.width = props.width
-    } else if (this.state && this.state.width){
-      initState.width = this.state.width
-    } else {
-      initState.width = width;
-    }
-
-    if (props.height) {
-      initState.height = props.height
-    } else if (this.state && this.state.height){
-      initState.height = this.state.height
-    } else {
-      initState.height = height;
-    }
-
+    initState.width = props.width || width
+    initState.height = props.height || height
     initState.offset[initState.dir] = initState.dir === 'y'
       ? height * props.index
       : width * props.index
-
 
     this.internals = {
       ...this.internals,
@@ -303,24 +278,13 @@ export default class extends Component {
     if (!this.state.offset || width !== this.state.width || height !== this.state.height) {
       state.offset = offset
     }
-
-    // related to https://github.com/leecade/react-native-swiper/issues/570
-    // contentOffset is not working in react 0.48.x so we need to use scrollTo
-    // to emulate offset.
-    if (Platform.OS === 'ios') {
-      if (this.initialRender && this.state.total > 1) {
-        this.scrollView.scrollTo({...offset, animated: false})
-        this.initialRender = false;
-      }
-    }
-
     this.setState(state)
   }
 
   loopJump = () => {
     if (!this.state.loopJump) return
     const i = this.state.index + (this.props.loop ? 1 : 0)
-    const scrollView = this.scrollView
+    const scrollView = this.refs.scrollView
     this.loopJumpTimer = setTimeout(() => scrollView.setPageWithoutAnimation &&
       scrollView.setPageWithoutAnimation(i), 50)
   }
@@ -409,8 +373,6 @@ export default class extends Component {
   updateIndex = (offset, dir, cb) => {
     const state = this.state
     let index = state.index
-    if (!this.internals.offset)   // Android not setting this onLayout first? https://github.com/leecade/react-native-swiper/issues/582
-      this.internals.offset = {}
     const diff = offset[dir] - this.internals.offset[dir]
     const step = dir === 'x' ? state.width : state.height
     let loopJump = false
@@ -478,10 +440,10 @@ export default class extends Component {
     if (state.dir === 'x') x = diff * state.width
     if (state.dir === 'y') y = diff * state.height
 
-    if (Platform.OS !== 'ios') {
-      this.scrollView && this.scrollView[animated ? 'setPage' : 'setPageWithoutAnimation'](diff)
+    if (Platform.OS === 'android') {
+      this.refs.scrollView && this.refs.scrollView[animated ? 'setPage' : 'setPageWithoutAnimation'](diff)
     } else {
-      this.scrollView && this.scrollView.scrollTo({ x, y, animated })
+      this.refs.scrollView && this.refs.scrollView.scrollTo({ x, y, animated })
     }
 
     // update scroll state
@@ -491,7 +453,7 @@ export default class extends Component {
     })
 
     // trigger onScrollEnd manually in android
-    if (!animated || Platform.OS !== 'ios') {
+    if (!animated || Platform.OS === 'android') {
       setImmediate(() => {
         this.onScrollEnd({
           nativeEvent: {
@@ -589,9 +551,7 @@ export default class extends Component {
 
     if (this.props.loop ||
       this.state.index !== this.state.total - 1) {
-      button = this.props.nextButton || <Text style={styles.buttonText}>
-        {Platform.OS !== 'android' && I18nManager.isRTL ? '‹' : '›'}
-      </Text>
+      button = this.props.nextButton || <Text style={styles.buttonText}>{Platform.OS !== 'android' && I18nManager.isRTL ? '‹' : '›'}</Text>
     }
 
     return (
@@ -610,9 +570,7 @@ export default class extends Component {
     let button = null
 
     if (this.props.loop || this.state.index !== 0) {
-      button = this.props.prevButton || <Text style={styles.buttonText}>
-        {Platform.OS !== 'android' && I18nManager.isRTL !== 'android' ? '›' : '‹'}
-      </Text>
+      button = this.props.prevButton || <Text style={styles.buttonText}>{Platform.OS !== 'android' && I18nManager.isRTL !== 'android' ? '›' : '‹'}</Text>
     }
 
     return (
@@ -636,42 +594,25 @@ export default class extends Component {
     )
   }
 
-  refScrollView = view => {
-    this.scrollView = view;
-  }
-
-  onPageScrollStateChanged = state => {
-    switch (state) {
-      case 'dragging':
-        return this.onScrollBegin();
-
-      case 'idle':
-      case 'settling':
-        if (this.props.onTouchEnd) this.props.onTouchEnd();
-    }
-  }
-
   renderScrollView = pages => {
     if (Platform.OS === 'ios') {
       return (
-        <ScrollView ref={this.refScrollView}
+        <ScrollView ref='scrollView'
           {...this.props}
           {...this.scrollViewPropOverrides()}
           contentContainerStyle={[styles.wrapperIOS, this.props.style]}
           contentOffset={this.state.offset}
           onScrollBeginDrag={this.onScrollBegin}
           onMomentumScrollEnd={this.onScrollEnd}
-          onScrollEndDrag={this.onScrollEndDrag}
-          style={this.props.scrollViewStyle}>
+          onScrollEndDrag={this.onScrollEndDrag}>
           {pages}
         </ScrollView>
        )
     }
     return (
-      <ViewPagerAndroid ref={this.refScrollView}
+      <ViewPagerAndroid ref='scrollView'
         {...this.props}
         initialPage={this.props.loop ? this.state.index + 1 : this.state.index}
-        onPageScrollStateChanged={this.onPageScrollStateChanged}
         onPageSelected={this.onScrollEnd}
         key={pages.length}
         style={[styles.wrapperAndroid, this.props.style]}>
