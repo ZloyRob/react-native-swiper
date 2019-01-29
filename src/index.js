@@ -67,12 +67,7 @@ const styles = {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'transparent',
-    ...Platform.select({
-      android: {
-        flexDirection: I18nManager.isRTL ? 'row-reverse' : 'row'
-      }
-    })
+    backgroundColor: 'transparent'
   },
 
   title: {
@@ -97,7 +92,12 @@ const styles = {
     paddingHorizontal: 10,
     paddingVertical: 10,
     justifyContent: 'space-between',
-    alignItems: 'center'
+    alignItems: 'center',
+    ...Platform.select({
+      android: {
+        flexDirection: I18nManager.isRTL ? 'row-reverse' : 'row'
+      }
+    })
   },
 
   buttonText: {
